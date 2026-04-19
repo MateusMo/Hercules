@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "animation.h"
-#include "messages.h"
+#include "../animation.h"
+#include "../messages.h"
 
 #define RESET "\033[0m"
 #define RED   "\033[1;31m"

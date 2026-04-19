@@ -4,7 +4,7 @@
 
 #include <stdio.h>
 #include <unistd.h>
-#include "animation.h"
+#include "../animation.h"
 
 // cores ANSI
 #define RESET "\033[0m"
