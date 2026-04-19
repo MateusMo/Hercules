@@ -63,7 +63,7 @@ void hercules_animation(const char *str) {
         printf(GOLD "%s" RESET, templo_base);
         printf("\n");
 
-        printf(CYAN "[%c] Força de Hércules limpando: %s...\n" RESET,
+        printf(CYAN "[%c] Hercules is cleaning with strength:%s...\n" RESET,
                spin[i % 4], str);
 
         printf("[");

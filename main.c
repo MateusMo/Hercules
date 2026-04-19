@@ -6,7 +6,6 @@
 #include "animation.h"
 #include "messages.h"
 
-// cores (pode manter aqui ou mover depois)
 #define RESET "\033[0m"
 #define RED   "\033[1;31m"
 
@@ -16,11 +15,11 @@ int clear_file(const char *str) {
     int result = remove(str);
 
     if (result == 0) {
-        // mensagem de sucesso aleatória (1 a 9)
+        // random success message(1 a 9)
         int msg = rand() % 9 + 1;
         success_messages(msg, str);
     } else {
-        // mensagem de erro fixa (mais clara pro usuário)
+        // error message
         fail_messages(1, str);
     }
 
@@ -52,6 +51,6 @@ int main(int argc, char *argv[]) {
         return status;
     }
 
-    printf("Comando desconhecido: %s\n", argv[1]);
+    printf("Unknown command: %s\n", argv[1]);
     return 1;
 }
