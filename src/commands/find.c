@@ -5,36 +5,89 @@
 #include <stdlib.h>
 #include <time.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #define RESET "\033[0m"
 #define GOLD  "\033[1;33m"
 #define CYAN  "\033[1;36m"
 #define GREEN "\033[1;32m"
+#define RED   "\033[1;31m"
 #define DIM   "\033[2m"
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-// ".txt"      -> extensão pura
-// "config"    -> sem extensão (busca parcial)
-// "config.c"  -> nome com extensão (match exato)
+// ".txt" -> extensão pura | "main.c" -> nome exato | "config" -> parcial
 static int is_pure_extension(const char *s) {
     return s[0] == '.' && strlen(s) > 1 && strchr(s + 1, '.') == NULL;
 }
 
 static void build_glob(const char *term, char *glob, size_t size) {
-    if (is_pure_extension(term)) {
-        snprintf(glob, size, "*%s", term);          // .txt  -> *.txt
-    } else if (strchr(term, '.') != NULL) {
-        snprintf(glob, size, "%s", term);           // main.c -> main.c (exato)
-    } else {
-        snprintf(glob, size, "*%s*", term);         // config -> *config*
+    if (is_pure_extension(term))
+        snprintf(glob, size, "*%s", term);           // .jpg  -> *.jpg
+    else if (strchr(term, '.') != NULL)
+        snprintf(glob, size, "%s", term);            // main.c -> main.c
+    else
+        snprintf(glob, size, "*%s*", term);          // config -> *config*
+}
+
+// resolve ~, ./ e caminhos absolutos
+static const char *resolve_path(const char *input) {
+    static char resolved[1024];
+
+    if (!input) return NULL;
+
+    if (input[0] == '~') {
+        const char *home = getenv("HOME");
+        if (!home) home = "";
+        snprintf(resolved, sizeof(resolved), "%s%s", home, input + 1);
+        return resolved;
     }
+
+    if (input[0] == '.') {
+        char cwd[512];
+        if (getcwd(cwd, sizeof(cwd)))
+            snprintf(resolved, sizeof(resolved), "%s/%s", cwd, input + 1);
+        else
+            snprintf(resolved, sizeof(resolved), "%s", input);
+        return resolved;
+    }
+
+    return input;
+}
+
+// detecta Termux e valida se o storage está disponível
+static const char *get_default_base(void) {
+    static char path[1024];
+
+    if (getenv("PREFIX")) {
+        // ambiente Termux
+        const char *home = getenv("HOME");
+        if (!home) home = "";
+
+        snprintf(path, sizeof(path), "%s/storage/shared", home);
+
+        struct stat st;
+        if (stat(path, &st) == 0 && S_ISDIR(st.st_mode))
+            return path;
+
+        // storage não foi liberado ainda
+        printf(RED "\n  [!] Termux storage not found.\n" RESET);
+        printf(DIM "      Run: termux-setup-storage\n\n" RESET);
+
+        // fallback: busca só no home do Termux
+        snprintf(path, sizeof(path), "%s", home);
+        return path;
+    }
+
+    // Linux padrão
+    return "/";
 }
 
 static void print_result(const char *path_raw) {
     char path[1024];
     strncpy(path, path_raw, sizeof(path) - 1);
     path[sizeof(path) - 1] = '\0';
+
     size_t len = strlen(path);
     if (len > 0 && path[len - 1] == '\n')
         path[len - 1] = '\0';
@@ -45,20 +98,12 @@ static void print_result(const char *path_raw) {
         return;
     }
 
-    const char *type_label;
-    const char *type_color;
+    const char *type_label = S_ISDIR(st.st_mode) ? "DIR " : "FILE";
+    const char *type_color = S_ISDIR(st.st_mode) ? GOLD   : GREEN;
 
-    if (S_ISDIR(st.st_mode)) {
-        type_label = "DIR ";
-        type_color = GOLD;
-    } else {
-        type_label = "FILE";
-        type_color = GREEN;
-    }
-
-    // tamanho legível
     char size_buf[32];
     long long sz = (long long)st.st_size;
+
     if (sz < 1024)
         snprintf(size_buf, sizeof(size_buf), "%lldB", sz);
     else if (sz < 1024 * 1024)
@@ -74,8 +119,6 @@ static void print_result(const char *path_raw) {
 
 // ── núcleo ────────────────────────────────────────────────────────────────────
 
-// type_filter: 'f' = só arquivos, 'd' = só dirs, 0 = ambos
-// search_path: NULL = busca em / com exclusões padrão
 int find_file_ex(const char *term, char type_filter, const char *search_path) {
 
     find_animation(term);
@@ -83,15 +126,15 @@ int find_file_ex(const char *term, char type_filter, const char *search_path) {
     char glob[256];
     build_glob(term, glob, sizeof(glob));
 
-    const char *base = search_path ? search_path : "/";
+    const char *base = search_path ? resolve_path(search_path) : get_default_base();
 
+    // exclusões apenas quando buscando em / no Linux
     const char *exclusions =
-        search_path ? "" :
+        (search_path == NULL && !getenv("PREFIX")) ?
         " -not -path \"/proc/*\""
         " -not -path \"/sys/*\""
         " -not -path \"/dev/*\""
-        " -not -path \"/run/*\""
-        " -not -path \"/snap/*/\"";
+        " -not -path \"/run/*\"" : "";
 
     char type_flag[16] = "";
     if (type_filter == 'f')
@@ -119,8 +162,7 @@ int find_file_ex(const char *term, char type_filter, const char *search_path) {
     printf("\n");
 
     char path[1024];
-    int found = 0;
-    int count = 0;
+    int found = 0, count = 0;
 
     while (fgets(path, sizeof(path), fp)) {
         found = 1;
@@ -132,8 +174,7 @@ int find_file_ex(const char *term, char type_filter, const char *search_path) {
     printf("\n");
 
     if (!found) {
-        int msg = rand() % 4 + 1;
-        find_fail_messages(msg, term);
+        find_fail_messages(rand() % 4 + 1, term);
         return 1;
     }
 

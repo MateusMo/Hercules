@@ -25,15 +25,14 @@ static void print_usage(void) {
     printf("  hercules --find  <term> [-p <path>] [-t f|d]\n");
     printf("\n");
     printf("--find options:\n");
-    printf("  -p <path>   limit search to a specific directory (default: /)\n");
+    printf("  -p <path>   custom search path (supports ~ and .)\n");
     printf("  -t f        files only\n");
     printf("  -t d        directories only\n");
     printf("\n");
     printf("Examples:\n");
-    printf("  hercules --find .txt\n");
+    printf("  hercules --find .jpg\n");
     printf("  hercules --find config -p ~/Projects\n");
     printf("  hercules --find main.c -t f\n");
-    printf("  hercules --find build  -t d\n");
 }
 
 int main(int argc, char *argv[]) {
