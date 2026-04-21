@@ -16,21 +16,20 @@
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-// ".txt" -> extensão pura | "main.c" -> nome exato | "config" -> parcial
 static int is_pure_extension(const char *s) {
     return s[0] == '.' && strlen(s) > 1 && strchr(s + 1, '.') == NULL;
 }
 
 static void build_glob(const char *term, char *glob, size_t size) {
     if (is_pure_extension(term))
-        snprintf(glob, size, "*%s", term);           // .jpg  -> *.jpg
+        snprintf(glob, size, "*%s", term);
     else if (strchr(term, '.') != NULL)
-        snprintf(glob, size, "%s", term);            // main.c -> main.c
+        snprintf(glob, size, "%s", term);
     else
-        snprintf(glob, size, "*%s*", term);          // config -> *config*
+        snprintf(glob, size, "*%s*", term);
 }
 
-// resolve ~, ./ e caminhos absolutos
+// resolve ~ e caminhos relativos
 static const char *resolve_path(const char *input) {
     static char resolved[1024];
 
@@ -55,12 +54,19 @@ static const char *resolve_path(const char *input) {
     return input;
 }
 
-// detecta Termux e valida se o storage está disponível
+// 🔥 DETECÇÃO INTELIGENTE (Termux + Linux)
 static const char *get_default_base(void) {
     static char path[1024];
 
     if (getenv("PREFIX")) {
-        // ambiente Termux
+        // ── Termux ───────────────────────────────
+
+        // 1. Caminho REAL do Android (mais confiável)
+        if (access("/storage/emulated/0", F_OK) == 0) {
+            return "/storage/emulated/0";
+        }
+
+        // 2. Fallback clássico do Termux
         const char *home = getenv("HOME");
         if (!home) home = "";
 
@@ -70,16 +76,15 @@ static const char *get_default_base(void) {
         if (stat(path, &st) == 0 && S_ISDIR(st.st_mode))
             return path;
 
-        // storage não foi liberado ainda
-        printf(RED "\n  [!] Termux storage not found.\n" RESET);
+        // 3. Último fallback
+        printf(RED "\n  [!] Storage not accessible.\n" RESET);
         printf(DIM "      Run: termux-setup-storage\n\n" RESET);
 
-        // fallback: busca só no home do Termux
         snprintf(path, sizeof(path), "%s", home);
         return path;
     }
 
-    // Linux padrão
+    // ── Linux normal ─────────────────────────────
     return "/";
 }
 
@@ -128,7 +133,6 @@ int find_file_ex(const char *term, char type_filter, const char *search_path) {
 
     const char *base = search_path ? resolve_path(search_path) : get_default_base();
 
-    // exclusões apenas quando buscando em / no Linux
     const char *exclusions =
         (search_path == NULL && !getenv("PREFIX")) ?
         " -not -path \"/proc/*\""
@@ -143,8 +147,10 @@ int find_file_ex(const char *term, char type_filter, const char *search_path) {
         snprintf(type_flag, sizeof(type_flag), " -type d");
 
     char command[2048];
+
+    // 🔥 quoting seguro (funciona em Linux + Termux)
     snprintf(command, sizeof(command),
-             "find \"%s\"%s%s -iname \"%s\" 2>/dev/null",
+             "find '%s'%s%s -iname '%s' 2>/dev/null",
              base, exclusions, type_flag, glob);
 
     FILE *fp = popen(command, "r");
@@ -182,7 +188,7 @@ int find_file_ex(const char *term, char type_filter, const char *search_path) {
     return 0;
 }
 
-// ── wrappers públicos ─────────────────────────────────────────────────────────
+// ── wrappers ──────────────────────────────────────────────────────────────────
 
 int find_file(const char *filename) {
     return find_file_ex(filename, 0, NULL);
