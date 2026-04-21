@@ -2,38 +2,32 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include <sys/stat.h>
 
-#include "../animation.h"
-#include "../messages.h"
+#include "../include/messages.h"
+#include "../include/animation.h"
 
-#define RESET "\033[0m"
-#define RED   "\033[1;31m"
+// headers dos comandos
+int clear_file(const char *path);
+int clear_dir(const char *path);
+int find_file(const char *filename);
+int find_dir(const char *dirname);
 
-int clear_file(const char *str) {
-    hercules_animation(str);
-
-    int result = remove(str);
-
-    if (result == 0) {
-        // random success message(1 a 9)
-        int msg = rand() % 9 + 1;
-        success_messages(msg, str);
-    } else {
-        // error message
-        fail_messages(1, str);
-    }
-
-    return result;
+static int is_directory(const char *path) {
+    struct stat st;
+    if (stat(path, &st) == 0)
+        return S_ISDIR(st.st_mode);
+    return 0;
 }
 
 int main(int argc, char *argv[]) {
 
-    // inicializa aleatoriedade
     srand(time(NULL));
 
     if (argc < 3) {
-        printf("Uso:\n");
-        printf("  hercules --clear <arquivo1> [arquivo2 ...]\n");
+        printf("Usage:\n");
+        printf("  hercules --clear <file1|dir1> [file2|dir2...]\n");
+        printf("  hercules --find <name>\n");
         return 1;
     }
 
@@ -41,14 +35,20 @@ int main(int argc, char *argv[]) {
         int status = 0;
 
         for (int i = 2; i < argc; i++) {
-            int result = clear_file(argv[i]);
-
-            if (result != 0) {
-                status = 1;
+            if (is_directory(argv[i])) {
+                if (clear_dir(argv[i]) != 0)
+                    status = 1;
+            } else {
+                if (clear_file(argv[i]) != 0)
+                    status = 1;
             }
         }
 
         return status;
+    }
+
+    if (strcmp(argv[1], "--find") == 0) {
+        return find_file(argv[2]);
     }
 
     printf("Unknown command: %s\n", argv[1]);
